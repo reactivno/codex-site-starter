@@ -5,28 +5,29 @@ on:
     types: [closed]
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Удаление стенда PR
+      - name: Удаление папки стенда
         # Чистим всегда, не глядя на флаг merged:
         # у смерженного PR payload пустой.
         continue-on-error: true
         env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
           PR: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq lftp
-          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$FTP_SERVER" -e "
-            set ftp:ssl-allow no;
-            cd $FTP_SERVER_DIR || exit 0;
-            rm -rf previews/pr-$PR;
-            bye
-          "
+          AUTH="x-access-token:${GITHUB_TOKEN}"
+          REMOTE="https://${AUTH}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --depth 1 --branch gh-pages "$REMOTE" pages
+          cd pages
+          rm -rf "pr-${PR}"
+          git -c user.name=github-actions -c user.email=actions@github.com \
+            commit -am "cleanup: pr-${PR}" || exit 0
+          git push

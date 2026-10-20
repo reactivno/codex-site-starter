@@ -25,7 +25,7 @@ MAIL_TO=you@example.com php -S localhost:8000
 ```text
 index.html            страница с формой
 css/style.css         стили
-js/main.js            отправка формы без перезагрузки
+js/main.js            отправка формы, на стенде отключена
 php/send.php          валидация и mail()
 .github/workflows/    preview | cleanup | deploy
 AGENTS.md             правила работы Codex
@@ -37,11 +37,20 @@ TZ.md                 требования и пайплайн
 
 | Секрет | Значение |
 | --- | --- |
-| `FTP_SERVER` | хост FTP, например `ftp.example.com` |
-| `FTP_USERNAME` | логин FTP |
-| `FTP_PASSWORD` | пароль FTP |
-| `FTP_SERVER_DIR` | папка сайта на сервере, с `/` на конце: `/public_html/` |
-| `PREVIEW_BASE_URL` | адрес стендов без слэша: `https://staging.example.com/previews` |
+| `FTP_SERVER` | хост FTP, например `ftp.example.com` (только для прода) |
+| `FTP_USERNAME` | логин FTP (только для прода) |
+| `FTP_PASSWORD` | пароль FTP (только для прода) |
+| `FTP_SERVER_DIR` | папка сайта на сервере, с `/` на конце: `/public_html/` (только для прода) |
+| `PREVIEW_BASE_URL` | адрес стендов без слэша: `https://<user>.github.io/<repo>` |
+
+## GitHub Pages (для стендов)
+
+1. Репозиторий публичный, либо платный план — на бесплатном страницы приватного репозитория не публикуются.
+2. Settings → Pages → Source: **Deploy from a branch**, ветка `gh-pages`, папка `/(root)`.
+3. Ветка `gh-pages` появится после первого PR: её создаёт workflow `Preview`.
+4. Стенд PR живёт по адресу `PREVIEW_BASE_URL/pr-<номер>/`, папки других PR сохраняются.
+
+PHP на Pages не выполняется, поэтому `php/` на стенд не заливается, а форма на стенде отключена в `js/main.js`.
 
 ## Переменные окружения сайта (на хостинге)
 
@@ -56,7 +65,7 @@ TZ.md                 требования и пайплайн
 ## Как идёт работа
 
 1. Codex делает ветку, правки, PR.
-2. Workflow `Preview` заливает код в `/previews/pr-<номер>/` и пишет ссылку в PR.
+2. Workflow `Preview` публикует статику в ветку `gh-pages` (папка `pr-<номер>`) и пишет ссылку в PR.
 3. Вы смотрите стенд и одобряете PR.
-4. После merge в `main` workflow `Deploy` заливает сайт в `FTP_SERVER_DIR`.
-5. `Cleanup` удаляет папку стенда при закрытии PR.
+4. После merge в `main` workflow `Deploy` заливает сайт по FTP в `FTP_SERVER_DIR`.
+5. `Cleanup` удаляет папку стенда из `gh-pages` при закрытии PR.

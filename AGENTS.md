@@ -36,6 +36,8 @@
 
 | Workflow | Событие | Что делает |
 | --- | --- | --- |
-| `preview.yml` | `pull_request` opened/synchronize/reopened | FTP в `FTP_SERVER_DIR` + `previews/pr-<номер>/`, комментарий со ссылкой |
-| `cleanup.yml` | `pull_request` closed | удаляет `previews/pr-<номер>/` через lftp |
+| `preview.yml` | `pull_request` opened/synchronize/reopened | `php -l`, публикация статики в `gh-pages` + `pr-<номер>/`, комментарий со ссылкой |
+| `cleanup.yml` | `pull_request` closed | удаляет `pr-<номер>/` из ветки `gh-pages` |
 | `deploy.yml` | `push` в `main` | FTP в `FTP_SERVER_DIR` |
+
+Стенд — GitHub Pages: PHP там не исполняется, `php/` в него не попадает, форма на стенде отключена. Это ожидаемо и починке не подлежит: отправку проверяй локально (`php -S`) или на проде.

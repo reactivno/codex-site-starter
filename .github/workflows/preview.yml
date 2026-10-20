@@ -4,16 +4,19 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# содержимое нужно, чтобы пушить в gh-pages; PR — чтобы писать комментарий
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
+
+# пуши в gh-pages из разных PR идут по очереди, иначе ветка конфликтует
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
 
 jobs:
   preview:
     runs-on: ubuntu-latest
-    env:
-      PREVIEW_DIR: >-
-        ${{ secrets.FTP_SERVER_DIR }}previews/pr-${{ github.event.pull_request.number }}/
     steps:
       - uses: actions/checkout@v4
 
@@ -26,20 +29,22 @@ jobs:
           find . -name '*.php' -not -path './.git/*' -print0 \
             | xargs -0 -r -n1 php -l
 
-      - name: Загрузка на стенд
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+      - name: Сборка статики
+        # Pages не запускает PHP: php/ на стенд не кладём.
+        run: |
+          rsync -a \
+            --exclude '.git' --exclude '.github' --exclude '.gitignore' \
+            --exclude '.env*' --exclude '*.md' --exclude 'php' \
+            ./ _site/
+
+      - name: Публикация стенда
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ env.PREVIEW_DIR }}
-          dangerous-clean-slate: true
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
-            **/*.md
-            **/.env*
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./_site
+          destination_dir: pr-${{ github.event.pull_request.number }}
+          keep_files: true
 
       - name: Ссылка на стенд в PR
         env:

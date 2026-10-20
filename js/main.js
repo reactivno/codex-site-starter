@@ -2,9 +2,22 @@ const form = document.getElementById("lead-form");
 const status = document.getElementById("lead-status");
 const submit = form.querySelector('button[type="submit"]');
 
+// На стенде GitHub Pages нет PHP: отправку отключаем, иначе пользователь
+// получит ошибку сети вместо понятного сообщения.
+const isStand = location.hostname.endsWith("github.io");
+
+if (isStand) {
+  submit.disabled = true;
+  status.textContent = "Тестовый стенд: отправка формы отключена.";
+}
+
 // Проверка в браузере — только подсказка; сервер проверяет поля заново.
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+
+  if (isStand) {
+    return;
+  }
 
   status.className = "form__status";
   status.textContent = "Отправляем…";
