@@ -40,14 +40,13 @@ TZ.md                 требования и пайплайн
 | `FTP_SERVER` | хост FTP, например `ftp.example.com` (только для прода) |
 | `FTP_USERNAME` | логин FTP (только для прода) |
 | `FTP_PASSWORD` | пароль FTP (только для прода) |
-| `PREVIEW_BASE_URL` | адрес стендов без слэша: `https://<user>.github.io/<repo>` |
 
 ## GitHub Pages (для стендов)
 
 1. Репозиторий публичный, либо платный план — на бесплатном страницы приватного репозитория не публикуются.
 2. Settings → Pages → Source: **Deploy from a branch**, ветка `gh-pages`, папка `/(root)`.
 3. Ветка `gh-pages` появится после первого PR: её создаёт workflow `Preview`.
-4. Стенд PR живёт по адресу `PREVIEW_BASE_URL/pr-<номер>/`, папки других PR сохраняются.
+4. Стенд PR живёт по адресу `https://<owner>.github.io/<repo>/pr-<номер>/`. Ссылка собирается из `github.repository_owner` и `github.event.repository.name`, поэтому секрет не нужен. При подключении своего домена адрес придётся задать вручную.
 
 PHP на Pages не выполняется, поэтому `php/` на стенд не заливается, а форма на стенде отключена в `js/main.js`.
 
