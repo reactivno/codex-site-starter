@@ -1,0 +1,50 @@
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      PREVIEW_DIR: >-
+        ${{ secrets.FTP_SERVER_DIR }}previews/pr-${{ github.event.pull_request.number }}/
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+
+      - name: Проверка синтаксиса PHP
+        run: |
+          find . -name '*.php' -not -path './.git/*' -print0 \
+            | xargs -0 -r -n1 php -l
+
+      - name: Загрузка на стенд
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ env.PREVIEW_DIR }}
+          dangerous-clean-slate: true
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/*.md
+            **/.env*
+
+      - name: Ссылка на стенд в PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          PREVIEW_BASE: ${{ secrets.PREVIEW_BASE_URL }}
+        run: |
+          gh pr comment "$PR" --body "Стенд: ${PREVIEW_BASE}/pr-${PR}/"
