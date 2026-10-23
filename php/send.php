@@ -5,6 +5,9 @@ declare(strict_types=1);
 // Обработчик формы, нейтральный к набору полей.
 // Под новую форму правится только массив FORM_CONFIG: имена обязательных полей,
 // поле с email, поле-ловушка и лимиты. Остальной код менять не нужно.
+//
+// ВАЖНО: имена в FORM_CONFIG должны совпадать с атрибутами name="..." в HTML.
+// Меняешь поля формы — правь HTML и FORM_CONFIG одним коммитом.
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
