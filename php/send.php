@@ -69,13 +69,15 @@ if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
 $prefix = $env('MAIL_SUBJECT_PREFIX');
 
 // Тема без пользовательских данных: подстановка ломает заголовки письма.
-$subject = trim('Заявка с сайта ' . $prefix);
+// mail() не кодирует заголовки сам: кириллица без RFC 2047 приходит пустой.
+$subject = mb_encode_mimeheader(trim('Заявка с сайта ' . $prefix), 'UTF-8', 'B');
 $body = "Имя: {$name}\nEmail: {$email}\n\n{$message}\n";
 
 $headers = implode("\r\n", [
     'From: ' . $from,
     'Reply-To: ' . $email,
     'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: 8bit',
     'MIME-Version: 1.0',
 ]);
 
