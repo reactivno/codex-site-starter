@@ -57,7 +57,15 @@ if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
     exit;
 }
 
-$from = $env('MAIL_FROM', $to);
+$from = $env('MAIL_FROM');
+if ($from === '') {
+    // Домен берём из конфигурации сервера, а не из заголовка Host от клиента.
+    $host = preg_replace('/[^a-z0-9.\-]/i', '', (string) ($_SERVER['SERVER_NAME'] ?? ''));
+    $from = $host !== '' ? 'no-reply@' . $host : $to;
+}
+if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
+    $from = $to;
+}
 $prefix = $env('MAIL_SUBJECT_PREFIX');
 
 // Тема без пользовательских данных: подстановка ломает заголовки письма.
