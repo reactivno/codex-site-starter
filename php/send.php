@@ -2,91 +2,145 @@
 
 declare(strict_types=1);
 
-// Обработчик формы: проверяет поля и отправляет письмо через mail().
-// Значения приходят из переменных окружения сайта, не из кода.
+// Обработчик формы, нейтральный к набору полей.
+// Под новую форму правится только массив FORM_CONFIG: имена обязательных полей,
+// поле с email, поле-ловушка и лимиты. Остальной код менять не нужно.
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['ok' => false, 'error' => 'Метод не поддерживается'], JSON_UNESCAPED_UNICODE);
+const FORM_CONFIG = [
+    'required' => ['name', 'email', 'message'], // без этих полей заявка не принимается
+    'email' => 'email',                        // поле с email; пустая строка — проверки нет
+    'honeypot' => 'website',                   // поле-ловушка для ботов; пустая строка — выключено
+    'max_length' => 5000,                      // предел длины одного поля
+    'max_body' => 65536,                       // предел размера всей заявки
+];
+
+/**
+ * Ответ и выход: клиент всегда получает JSON, а не HTML-ошибку.
+ */
+function respond(int $status, array $payload): void
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$env = static function (string $key, string $default = ''): string {
+/**
+ * Значение из окружения сайта: getenv(), затем $_ENV, затем $_SERVER.
+ */
+function env(string $key, string $default = ''): string
+{
     $value = getenv($key);
     if ($value === false || $value === '') {
         $value = $_ENV[$key] ?? $_SERVER[$key] ?? $default;
     }
 
     return trim((string) $value);
-};
-
-// Ловушка для ботов: поле скрыто от людей.
-if (trim((string) ($_POST['website'] ?? '')) !== '') {
-    echo json_encode(['ok' => true]);
-    exit;
 }
 
-$name = trim((string) ($_POST['name'] ?? ''));
-$email = trim((string) ($_POST['email'] ?? ''));
-$message = trim((string) ($_POST['message'] ?? ''));
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    respond(405, ['ok' => false, 'error' => 'Метод не поддерживается']);
+}
 
+$honeypot = FORM_CONFIG['honeypot'];
+if ($honeypot !== '' && trim((string) ($_POST[$honeypot] ?? '')) !== '') {
+    respond(200, ['ok' => true]); // боту отвечаем как обычно, письмо не шлём
+}
+
+$fields = [];
 $errors = [];
-if ($name === '' || mb_strlen($name) > 100) {
-    $errors[] = 'Имя: от 1 до 100 символов.';
+$bodySize = 0;
+
+foreach ($_POST as $fieldName => $value) {
+    $fieldName = (string) $fieldName;
+
+    if ($honeypot !== '' && $fieldName === $honeypot) {
+        continue;
+    }
+    if (preg_match('/^[a-z0-9_-]{1,40}$/i', $fieldName) !== 1) {
+        continue; // имена с мусором в письмо не переносим
+    }
+    if (!is_string($value)) {
+        $errors[] = 'Поле «' . $fieldName . '»: ожидается текст.';
+        continue;
+    }
+
+    $value = trim($value);
+    if (mb_strlen($value) > FORM_CONFIG['max_length']) {
+        $errors[] = 'Поле «' . $fieldName . '»: не больше ' . FORM_CONFIG['max_length'] . ' символов.';
+        continue;
+    }
+    if ($value === '') {
+        continue;
+    }
+
+    $bodySize += mb_strlen($fieldName) + mb_strlen($value);
+    $fields[$fieldName] = $value;
 }
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $errors[] = 'Укажите корректный email.';
+
+foreach (FORM_CONFIG['required'] as $requiredField) {
+    if (!isset($fields[$requiredField])) {
+        $errors[] = 'Поле «' . $requiredField . '»: заполните.';
+    }
 }
-if ($message === '' || mb_strlen($message) > 5000) {
-    $errors[] = 'Сообщение: от 1 до 5000 символов.';
+
+$emailField = FORM_CONFIG['email'];
+$email = $emailField !== '' ? ($fields[$emailField] ?? '') : '';
+if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+    $errors[] = 'Поле «' . $emailField . '»: некорректный email.';
+}
+
+if ($bodySize > FORM_CONFIG['max_body']) {
+    respond(413, ['ok' => false, 'error' => 'Заявка слишком большая.']);
 }
 
 if ($errors !== []) {
-    http_response_code(422);
-    echo json_encode(['ok' => false, 'errors' => $errors], JSON_UNESCAPED_UNICODE);
-    exit;
+    respond(422, ['ok' => false, 'errors' => $errors]);
 }
 
-$to = $env('MAIL_TO');
-if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Получатель не настроен.'], JSON_UNESCAPED_UNICODE);
-    exit;
+if ($fields === []) {
+    respond(422, ['ok' => false, 'error' => 'Пустая заявка.']);
 }
 
-$from = $env('MAIL_FROM');
+$to = env('MAIL_TO');
+if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
+    respond(500, ['ok' => false, 'error' => 'Получатель не настроен.']);
+}
+
+$from = env('MAIL_FROM');
 if ($from === '') {
     // Домен берём из конфигурации сервера, а не из заголовка Host от клиента.
     $host = preg_replace('/[^a-z0-9.\-]/i', '', (string) ($_SERVER['SERVER_NAME'] ?? ''));
     $from = $host !== '' ? 'no-reply@' . $host : $to;
 }
-if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
+if (filter_var($from, FILTER_VALIDATE_EMAIL) === false) {
     $from = $to;
 }
-$prefix = $env('MAIL_SUBJECT_PREFIX');
 
-// Тема без пользовательских данных: подстановка ломает заголовки письма.
 // mail() не кодирует заголовки сам: кириллица без RFC 2047 приходит пустой.
+$prefix = env('MAIL_SUBJECT_PREFIX');
 $subject = mb_encode_mimeheader(trim('Заявка с сайта ' . $prefix), 'UTF-8', 'B');
-$body = "Имя: {$name}\nEmail: {$email}\n\n{$message}\n";
 
-$headers = implode("\r\n", [
+$body = '';
+foreach ($fields as $fieldName => $value) {
+    $body .= $fieldName . ': ' . $value . "\n";
+}
+
+$headers = [
     'From: ' . $from,
-    'Reply-To: ' . $email,
     'Content-Type: text/plain; charset=utf-8',
     'Content-Transfer-Encoding: 8bit',
     'MIME-Version: 1.0',
-]);
-
-$sent = mail($to, $subject, $body, $headers);
-
-if (!$sent) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Письмо не отправилось. Попробуйте позже.'], JSON_UNESCAPED_UNICODE);
-    exit;
+];
+if ($email !== '') {
+    // в заголовок попадает только адрес, уже прошедший FILTER_VALIDATE_EMAIL
+    $headers[] = 'Reply-To: ' . $email;
 }
 
-echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+if (mail($to, $subject, $body, implode("\r\n", $headers)) === false) {
+    respond(500, ['ok' => false, 'error' => 'Письмо не отправилось. Попробуйте позже.']);
+}
+
+respond(200, ['ok' => true]);
