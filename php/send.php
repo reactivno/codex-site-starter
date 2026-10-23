@@ -10,7 +10,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 
 const FORM_CONFIG = [
-    'required' => ['name', 'email', 'message'], // без этих полей заявка не принимается
+    'required' => ['phone', 'consent'],        // без этих полей заявка не принимается
     'email' => 'email',                        // поле с email; пустая строка — проверки нет
     'honeypot' => 'website',                   // поле-ловушка для ботов; пустая строка — выключено
     'max_length' => 5000,                      // предел длины одного поля
